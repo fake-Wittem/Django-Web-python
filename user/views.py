@@ -9,7 +9,7 @@ from django.views import View
 from rest_framework_jwt.settings import api_settings
 
 from menu.models import SysMenu, SysMenuSerializer
-from role.models import SysRole
+from role.models import SysRole, SysUserRole
 from user.models import SysUser, SysUserSerializer
 
 
@@ -120,18 +120,18 @@ class SaveInfoView(View):
         data = json.loads(request.body)
         if data['id'] == -1:
             # 添加
-            obj_user = SysUser(username=data['username'], password=data['password'],
+            user_obj = SysUser(username=data['username'], password=data['password'],
                                email=data['email'], phone_number=data['phone_number'],
                                status=data['status'], remark=data['remark'])
-            obj_user.create_time = datetime.now().date()
-            obj_user.avatar = 'default.jpg'
-            obj_user.password = '123456'
-            obj_user.save()
+            user_obj.create_time = datetime.now().date()
+            user_obj.avatar = 'default.jpg'
+            user_obj.password = '123456'
+            user_obj.save()
 
         else:
             # 修改
             # 生成模型对象
-            obj_user = SysUser(id=data['id'], username=data['username'],
+            user_obj = SysUser(id=data['id'], username=data['username'],
                                password=data['password'],
                                avatar=data['avatar'], email=data['email'],
                                phone_number=data['phone_number'],
@@ -140,13 +140,13 @@ class SaveInfoView(View):
                                update_time=data['update_time'],
                                remark=data['remark'])
             # 修改更新日期
-            obj_user.update_time = datetime.now().date()
+            user_obj.update_time = datetime.now().date()
             # 保存数据
-            obj_user.save()
+            user_obj.save()
         return JsonResponse({'code': 200, 'info': '保存成功'})
 
 
-# 基础操作类-获取用户信息
+# 用户操作类
 class ActionView(View):
 
     def get(self, request):
@@ -156,11 +156,23 @@ class ActionView(View):
         :return:
         """
         user_id = request.GET.get('id')
-        obj_user = SysUser.objects.get(id=user_id)
-        return JsonResponse({'code': 200, 'info': '获取用户成功', 'user': SysUserSerializer(obj_user).data})
+        user_obj = SysUser.objects.get(id=user_id)
+        return JsonResponse({'code': 200, 'info': '获取用户成功', 'user': SysUserSerializer(user_obj).data})
+
+    def delete(self, request):
+        """
+        删除用户（批量）
+        :param request:
+        :return:
+        """
+        ids_list = json.loads(request.body)
+        # 删除用户角色关联数据
+        SysUserRole.objects.filter(user_id__in=ids_list).delete()
+        SysUser.objects.filter(id__in=ids_list).delete()
+        return JsonResponse({'code': 200, 'info': '删除用户成功'})
 
 
-# 基础操作类-验证用户
+# 用户名查重类
 class CheckView(View):
 
     def post(self, request):
@@ -185,16 +197,41 @@ class UpdatePwdView(View):
         user_id = data['id']
         old_pwd = data['oldPassword']
         new_pwd = data['newPassword']
-        obj_user = SysUser.objects.get(id=user_id)
+        user_obj = SysUser.objects.get(id=user_id)
         # 验证密码是否正确
-        if obj_user.password == old_pwd:
+        if user_obj.password == old_pwd:
             # 正确，则修改密码
-            obj_user.password = new_pwd
-            obj_user.update_time = datetime.now().date()
-            obj_user.save()
+            user_obj.password = new_pwd
+            user_obj.update_time = datetime.now().date()
+            user_obj.save()
             return JsonResponse({'code': 200, 'info': '密码修改成功'})
         else:
             return JsonResponse({'code': 500, 'info': '原密码错误！'})
+
+
+# 重置密码
+class PasswordResetView(View):
+    def get(self, request):
+        user_id = request.GET.get('id')
+        user_obj = SysUser.objects.get(id=user_id)
+        user_obj.password = '123456'
+        user_obj.update_time = datetime.now().date()
+        user_obj.save()
+        return JsonResponse({'code': 200, 'info': '密码重置成功'})
+
+
+# 用户状态修改
+class StatusView(View):
+
+    def post(self, request):
+        data = json.loads(request.body)
+        user_id = data['id']
+        status = data['status']
+        user_obj = SysUser.objects.get(id=user_id)
+        user_obj.status = status
+        user_obj.update_time = datetime.now().date()
+        user_obj.save()
+        return JsonResponse({'code': 200, 'info': '状态修改成功'})
 
 
 # 头像文件上传请求
@@ -230,12 +267,12 @@ class AvatarUpdateView(View):
         data = json.loads(request.body)
         user_id = data['id']
         avatar = data['avatar']
-        obj_user = SysUser.objects.get(id=user_id)
-        if not obj_user:
+        user_obj = SysUser.objects.get(id=user_id)
+        if not user_obj:
             return JsonResponse({'code': 500, 'info': '用户不存在！'})
-        obj_user.avatar = avatar
-        obj_user.update_time = datetime.now().date()
-        obj_user.save()
+        user_obj.avatar = avatar
+        user_obj.update_time = datetime.now().date()
+        user_obj.save()
         return JsonResponse({'code': 200, 'info': '头像修改成功'})
 
 
@@ -249,6 +286,12 @@ class UserListView(View):
         query = data['query']  # 查询参数
         # 模糊查询username匹配项目
         user_list_filter = SysUser.objects.filter(username__icontains=query)
+
+        # 总页数
+        total_pages = user_list_filter.count()
+        if total_pages <= page_size:
+            # 当总数小于等于分页大小时，当前页自动设置为第一页
+            page_num = 1
         # 分页处理
         user_list_page = Paginator(user_list_filter, page_size).page(page_num)
         # 转成字典后嵌套进list列表
@@ -261,6 +304,21 @@ class UserListView(View):
             )
             role_list = [{'id': role.id, 'name': role.name} for role in role_list_obj]
             user['roles'] = role_list
-        # 总页数
-        total_pages = user_list_filter.count()
+
         return JsonResponse({'code': 200, 'info': '查询成功', 'userList': user_list, 'total': total_pages})
+
+
+# 用户角色授权
+class GrantRoleView(View):
+
+    def post(self, request):
+        data = json.loads(request.body)
+        user_id = data['id']
+        role_ids = data['roleIds']
+        # 先删除用户角色关联表的数据
+        SysUserRole.objects.filter(user_id=user_id).delete()
+        for role_id in role_ids:
+            # 保存新的关联数据
+            user_role_obj = SysUserRole(user_id=user_id, role_id=role_id)
+            user_role_obj.save()
+        return JsonResponse({'code': 200, 'info': '修改角色成功'})

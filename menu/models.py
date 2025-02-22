@@ -17,8 +17,8 @@ class SysMenu(models.Model):
     component = models.CharField(max_length=255, null=True, verbose_name='组件路径')
     menu_type = models.CharField(max_length=10, null=True, verbose_name='菜单类型（dir目录 menu菜单 button按钮）')
     perms = models.CharField(max_length=100, null=True, verbose_name='权限标识')
-    create_time = models.DateTimeField(null=True, verbose_name='创建时间')
-    update_time = models.DateTimeField(null=True, verbose_name='更新时间')
+    create_time = models.DateField(null=True, verbose_name='创建时间')
+    update_time = models.DateField(null=True, verbose_name='更新时间')
     remark = models.CharField(max_length=500, null=True, verbose_name='备注')
 
     # 调用sorted时按菜单顺序进行排序
