@@ -4,7 +4,6 @@ from datetime import datetime
 from django.conf import settings
 from django.core.paginator import Paginator
 from django.http import JsonResponse
-from django.shortcuts import render
 from django.views import View
 from rest_framework_jwt.settings import api_settings
 
@@ -48,11 +47,11 @@ class JwtTestView(View):
 # 处理登录请求
 class LoginView(View):
     # 构造菜单树，带children的
-    def build_tree_menu(self, sysMenuList: list[SysMenu]):
+    def build_tree_menu(self, sys_menu_list: list[SysMenu]):
         result_menu_list = []
         # 将菜单列表转换为字典，方便查找子菜单
-        menu_dict = {menu.id: menu for menu in sysMenuList}
-        for menu in sysMenuList:
+        menu_dict = {menu.id: menu for menu in sys_menu_list}
+        for menu in sys_menu_list:
             # 寻找子菜单
             # 先找到父菜单
             parent_menu = menu_dict.get(menu.parent_id)
